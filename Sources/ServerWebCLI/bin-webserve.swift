@@ -6,15 +6,20 @@ struct WebServeCommand {
     var host = "127.0.0.1"
     var port: UInt16?
     var open = false
+    var live = false
+    var watch = false
 
     static let usage = """
-    USAGE: webserve [<directory>] [--port <port>] [--host <host>] [--open]
+    USAGE: webserve [<directory>] [--port <port>] [--host <host>] [--open] [--live] [--watch]
 
-      <directory>   Serve textual files (html, css, js, svg, json, ...) from this directory.
+      <directory>   Serve every file in this directory (text, images, fonts, ...).
                     Without it, a built-in demo page is served.
       --port, -p    Port to bind (default: a free port).
       --host        Host to bind (default: 127.0.0.1).
       --open, -o    Open the served URL in the default browser.
+      --live, -l    Inject live reload: open pages reload when the site changes
+                    or the server restarts (pair with a fixed --port).
+      --watch, -w   Reload <directory> on file changes (implies --live).
     """
 
     static func parse(
@@ -30,6 +35,13 @@ struct WebServeCommand {
 
             case "--open", "-o":
                 command.open = true
+
+            case "--live", "-l":
+                command.live = true
+
+            case "--watch", "-w":
+                command.watch = true
+                command.live = true
 
             case "--port", "-p":
                 guard let value = iterator.next(),
@@ -51,6 +63,10 @@ struct WebServeCommand {
                 }
                 command.directory = argument
             }
+        }
+
+        if command.watch, command.directory == nil {
+            throw WebServeCommandError.invalid("--watch needs a <directory>")
         }
 
         return command
@@ -113,33 +129,44 @@ struct App {
                 Array(CommandLine.arguments.dropFirst())
             )
 
-            let site: WebSite
-
-            if let directory = command.directory {
-                let load = try WebSite.directory(
-                    at: URL(fileURLWithPath: directory)
-                )
-
-                for path in load.skipped {
-                    printError("skipped (not textual): \(path)")
-                }
-
-                site = load.site
-            } else {
-                site = WebServeDemo.site
-            }
+            let root = command.directory.map { URL(fileURLWithPath: $0) }
+            let site = try root.map(loadDirectory) ?? WebServeDemo.site
 
             let server = WebServer(
                 site: site,
                 host: command.host,
-                port: command.port
+                port: command.port,
+                liveReload: command.live
             )
 
             let url = command.open
                 ? try await server.startAndOpen()
                 : try await server.start()
 
-            print("webserve serving \(site.assets.count) assets on \(url.absoluteString)")
+            print("webserve serving \(site.assets.count) assets on \(url.absoluteString)\(command.live ? " (live reload)" : "")")
+
+            var watcher: WebDirectoryWatcher?
+
+            if command.watch, let root {
+                let directoryWatcher = WebDirectoryWatcher(root: root)
+
+                directoryWatcher.start {
+                    do {
+                        let site = try loadDirectory(root)
+                        server.replace(site)
+                        print("reloaded \(site.assets.count) assets (generation \(server.store.generation))")
+                    } catch {
+                        printError("reload failed: \(error.localizedDescription)")
+                    }
+                }
+
+                watcher = directoryWatcher
+                print("watching \(root.path)")
+            }
+
+            defer {
+                watcher?.stop()
+            }
 
             switch try await server.waitForTermination() {
             case .stopped:
@@ -155,6 +182,18 @@ struct App {
             printError(error.localizedDescription)
             Foundation.exit(2)
         }
+    }
+
+    private static func loadDirectory(
+        _ root: URL
+    ) throws -> WebSite {
+        let load = try WebSite.directory(at: root)
+
+        for path in load.skipped {
+            printError("skipped (unreadable): \(path)")
+        }
+
+        return load.site
     }
 
     private static func printError(

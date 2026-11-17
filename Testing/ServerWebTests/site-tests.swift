@@ -31,9 +31,22 @@ enum ServerWebSiteTestSuite {
                     "serverweb.content-type.js"
                 )
 
-                try Expect.false(
-                    WebContentType.isServable("/logo.png"),
-                    "serverweb.content-type.binary-not-servable"
+                try Expect.equal(
+                    WebContentType.forPath("/logo.png"),
+                    "image/png",
+                    "serverweb.content-type.png"
+                )
+
+                try Expect.equal(
+                    WebContentType.forPath("/fonts/inter.woff2"),
+                    "font/woff2",
+                    "serverweb.content-type.woff2"
+                )
+
+                try Expect.equal(
+                    WebContentType.forPath("/blob.unknownext"),
+                    "application/octet-stream",
+                    "serverweb.content-type.fallback"
                 )
             }
 
@@ -163,7 +176,7 @@ enum ServerWebSiteTestSuite {
             }
 
             Test(
-                "directory load serves textual files and skips binary ones"
+                "directory load keeps text and binary files byte-exact"
             ) {
                 let root = FileManager.default.temporaryDirectory
                     .appendingPathComponent("serverweb-\(UUID().uuidString)")
@@ -202,16 +215,26 @@ enum ServerWebSiteTestSuite {
                     [
                         "/css/site.css",
                         "/index.html",
+                        "/logo.png",
                     ],
                     "serverweb.directory.paths"
                 )
 
                 try Expect.equal(
+                    load.site.asset(at: "/logo.png")?.data,
+                    Data([0x89, 0x50, 0x4E, 0x47]),
+                    "serverweb.directory.binary-bytes"
+                )
+
+                try Expect.equal(
+                    load.site.asset(at: "/logo.png")?.contentType,
+                    "image/png",
+                    "serverweb.directory.binary-content-type"
+                )
+
+                try Expect.isEmpty(
                     load.skipped,
-                    [
-                        "/logo.png",
-                    ],
-                    "serverweb.directory.skipped"
+                    "serverweb.directory.nothing-skipped"
                 )
             }
         }

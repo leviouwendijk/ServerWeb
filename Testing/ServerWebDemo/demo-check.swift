@@ -1,9 +1,9 @@
 import Foundation
-import HTTP
-import Server
 import ServerWeb
 
-/// Fetches every asset back over the wire and compares it with the site.
+/// Fetches every served path back over the wire and compares bytes with the site.
+///
+/// Uses URLSession rather than `HTTPClient`, which still decodes bodies as text.
 enum DemoCheck {
     struct Failure: Error, CustomStringConvertible {
         let description: String
@@ -11,19 +11,10 @@ enum DemoCheck {
 
     static func run(
         site: WebSite,
-        url: URL
+        url base: URL,
+        liveReload: Bool
     ) async throws -> [String] {
-        guard let host = url.host,
-              let port = url.port else {
-            throw Failure(description: "Served URL has no host/port: \(url)")
-        }
-
-        let client = HTTPClient(
-            config: HTTPClientConfig(
-                host: host,
-                port: UInt16(port)
-            )
-        )
+        let session = URLSession(configuration: .ephemeral)
 
         var lines: [String] = []
         var failures: [String] = []
@@ -33,25 +24,45 @@ enum DemoCheck {
         }
 
         for (path, expected) in site.servedPaths {
-            let response = try await client.get(path)
+            let (data, response) = try await fetch(path, base: base, session: session)
+            let contentType = response.value(forHTTPHeaderField: "Content-Type")
+            let injected = liveReload && WebContentType.isHTML(expected.contentType)
 
-            if response.status != .ok {
-                failures.append("\(path): status \(response.status.code)")
-            } else if response.headers.contentType != expected.contentType {
-                failures.append("\(path): content-type \(response.headers.contentType ?? "nil") != \(expected.contentType)")
-            } else if response.body != expected.contents {
-                failures.append("\(path): body differs (\(response.body.utf8.count) vs \(expected.contents.utf8.count) bytes)")
+            if response.statusCode != 200 {
+                failures.append("\(path): status \(response.statusCode)")
+            } else if contentType != expected.contentType {
+                failures.append("\(path): content-type \(contentType ?? "nil") != \(expected.contentType)")
+            } else if injected {
+                let body = String(decoding: data, as: UTF8.self)
+
+                if body.contains(WebLiveReload.marker) {
+                    lines.append("ok    \(path)  \(expected.contentType)  \(data.count)B  +live-reload")
+                } else {
+                    failures.append("\(path): live-reload script missing")
+                }
+            } else if data != expected.data {
+                failures.append("\(path): bytes differ (\(data.count) vs \(expected.data.count))")
             } else {
-                lines.append("ok    \(path)  \(expected.contentType)  \(expected.contents.utf8.count)B")
+                lines.append("ok    \(path)  \(expected.contentType)  \(data.count)B")
             }
         }
 
-        let missing = try await client.get("/__missing__")
+        let (_, missing) = try await fetch("/__missing__", base: base, session: session)
 
-        if missing.status == .notFound {
+        if missing.statusCode == 404 {
             lines.append("ok    /__missing__  404")
         } else {
-            failures.append("/__missing__: expected 404, got \(missing.status.code)")
+            failures.append("/__missing__: expected 404, got \(missing.statusCode)")
+        }
+
+        if liveReload {
+            let (token, response) = try await fetch(WebLiveReload.endpoint, base: base, session: session)
+
+            if response.statusCode == 200, !token.isEmpty {
+                lines.append("ok    \(WebLiveReload.endpoint)  token \(String(decoding: token, as: UTF8.self))")
+            } else {
+                failures.append("\(WebLiveReload.endpoint): status \(response.statusCode)")
+            }
         }
 
         guard failures.isEmpty else {
@@ -61,5 +72,23 @@ enum DemoCheck {
         }
 
         return lines
+    }
+
+    private static func fetch(
+        _ path: String,
+        base: URL,
+        session: URLSession
+    ) async throws -> (Data, HTTPURLResponse) {
+        guard let url = URL(string: path, relativeTo: base) else {
+            throw Failure(description: "Bad path \(path)")
+        }
+
+        let (data, response) = try await session.data(from: url)
+
+        guard let http = response as? HTTPURLResponse else {
+            throw Failure(description: "\(path): not an HTTP response")
+        }
+
+        return (data, http)
     }
 }

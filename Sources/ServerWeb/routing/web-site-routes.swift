@@ -10,7 +10,7 @@ public extension WebAsset {
                 "Content-Type": contentType,
                 "Cache-Control": "no-store",
             ],
-            body: contents
+            bodyData: data
         )
     }
 }
@@ -58,7 +58,9 @@ public extension WebSite {
         return served
     }
 
-    /// One GET route per served path. Unmatched paths fall through to the router's 404.
+    /// One fixed GET route per served path, for embedding a static site in a
+    /// regular `Router`. `WebServer` serves through `WebSiteStore` instead, so
+    /// the site can be replaced while running.
     var routes: [Route] {
         servedPaths.map { path, asset in
             Route(

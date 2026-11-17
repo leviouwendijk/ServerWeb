@@ -31,6 +31,10 @@ enum DemoSite {
                     path: DemoData.jsonPath,
                     contents: try DemoData.json()
                 ),
+                WebAsset(
+                    path: DemoImage.path,
+                    data: try DemoImage.png()
+                ),
             ],
             index: site.index
         )
@@ -86,10 +90,12 @@ enum DemoSite {
                         "content": "width=device-width, initial-scale=1",
                     ]),
                     HTML.title(page.page.title),
+                    HTML.raw("<link rel=\"icon\" type=\"image/png\" href=\"\(DemoImage.path)\">"),
                 ],
                 body: [
                     HTML.header(["class": "site-header"]) {
                         HTML.nav {
+                            HTML.img(src: DemoImage.path, alt: "", ["class": "mark", "width": "24", "height": "24"])
                             HTML.a("/", navAttributes(active: identifier == "home")) {
                                 "Overview"
                             }
@@ -225,8 +231,13 @@ enum DemoSite {
                 CSS.decl("padding", "0 16px")
             )
             CSS.rule(
+                ".mark",
+                CSS.decl("border-radius", "4px")
+            )
+            CSS.rule(
                 ".site-header nav",
                 CSS.decl("display", "flex"),
+                CSS.decl("align-items", "center"),
                 CSS.decl("gap", "1rem"),
                 CSS.decl("padding", "1rem 0"),
                 CSS.decl("border-bottom", "1px solid var(--line)")

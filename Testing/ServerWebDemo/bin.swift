@@ -6,15 +6,19 @@ struct DemoCommand {
     var port: UInt16?
     var browser = false
     var check = false
+    var live = false
 
     static let usage = """
-    USAGE: t_serverweb_demo [--browser] [--check] [--port <port>] [--host <host>]
+    USAGE: t_serverweb_demo [--browser] [--live] [--check] [--port <port>] [--host <host>]
 
-    Builds a two-page site from typed data with the HTML/CSS/JS DSLs, materializes
-    it with Constructors (no files written) and serves it with ServerWeb.
+    Builds a two-page site from typed data with the HTML/CSS/JS DSLs, plus a
+    generated PNG, materializes it with Constructors (no files written) and
+    serves it with ServerWeb.
 
       --browser, -b   Open the served URL in the default browser.
-      --check         Fetch every asset back, verify it, then exit (0 ok, 1 failed).
+      --live, -l      Live reload: open pages reload when the demo restarts.
+                      Use a fixed --port, edit, rebuild, rerun.
+      --check         Fetch every path back, verify bytes, then exit (0 ok, 1 failed).
       --port, -p      Port to bind (default: a free port).
       --host          Host to bind (default: 127.0.0.1).
     """
@@ -35,6 +39,9 @@ struct DemoCommand {
 
             case "--check":
                 command.check = true
+
+            case "--live", "-l":
+                command.live = true
 
             case "--port", "-p":
                 guard let value = iterator.next(),
@@ -86,6 +93,7 @@ struct DemoMain {
                 site: site,
                 host: command.host,
                 port: command.port,
+                liveReload: command.live,
                 logLevel: .error
             )
 
@@ -93,13 +101,13 @@ struct DemoMain {
                 ? try await server.startAndOpen()
                 : try await server.start()
 
-            print("serving \(url.absoluteString)")
+            print("serving \(url.absoluteString)\(command.live ? " (live reload)" : "")")
             for asset in site.assets {
                 print("  \(asset.path)  \(asset.contentType)")
             }
 
             if command.check {
-                let lines = try await DemoCheck.run(site: site, url: url)
+                let lines = try await DemoCheck.run(site: site, url: url, liveReload: command.live)
                 lines.forEach { print($0) }
                 await server.stop()
                 Foundation.exit(0)

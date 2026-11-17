@@ -14,7 +14,7 @@ public enum WebSiteDirectoryError: Error, LocalizedError {
 public struct WebSiteDirectoryLoad: Sendable {
     public let site: WebSite
 
-    /// Files left out because they are not textual (see `WebContentType`).
+    /// Files that could not be read.
     public let skipped: [String]
 }
 
@@ -34,44 +34,21 @@ public extension WebSite {
             )
         }
 
-        let base = root.standardizedFileURL.path
-
-        let enumerator = FileManager.default.enumerator(
-            at: root,
-            includingPropertiesForKeys: [.isRegularFileKey],
-            options: [.skipsHiddenFiles]
-        )
-
         var assets: [WebAsset] = []
         var skipped: [String] = []
 
-        while let url = enumerator?.nextObject() as? URL {
-            let values = try url.resourceValues(
-                forKeys: [.isRegularFileKey]
-            )
-
-            guard values.isRegularFile == true else {
-                continue
-            }
-
-            let full = url.standardizedFileURL.path
-            let relative = String(
-                full.dropFirst(base.count)
-            )
-
-            guard WebContentType.isServable(relative),
-                  let contents = try? String(contentsOf: url, encoding: .utf8)
-            else {
+        for file in try WebDirectoryFiles.list(root) {
+            guard let data = try? Data(contentsOf: file.url) else {
                 skipped.append(
-                    relative
+                    file.relativePath
                 )
                 continue
             }
 
             assets.append(
                 WebAsset(
-                    path: relative,
-                    contents: contents
+                    path: file.relativePath,
+                    data: data
                 )
             )
         }
@@ -83,5 +60,58 @@ public extension WebSite {
             ),
             skipped: skipped.sorted()
         )
+    }
+}
+
+/// Regular, non-hidden files below a root, with their `/`-prefixed relative paths.
+enum WebDirectoryFiles {
+    struct File {
+        let url: URL
+        let relativePath: String
+        let modified: Date
+        let size: Int
+    }
+
+    static func list(
+        _ root: URL
+    ) throws -> [File] {
+        let keys: [URLResourceKey] = [
+            .isRegularFileKey,
+            .contentModificationDateKey,
+            .fileSizeKey,
+        ]
+
+        let base = root.standardizedFileURL.resolvingSymlinksInPath().path
+
+        let enumerator = FileManager.default.enumerator(
+            at: root,
+            includingPropertiesForKeys: keys,
+            options: [.skipsHiddenFiles]
+        )
+
+        var files: [File] = []
+
+        while let url = enumerator?.nextObject() as? URL {
+            let values = try url.resourceValues(
+                forKeys: Set(keys)
+            )
+
+            guard values.isRegularFile == true else {
+                continue
+            }
+
+            let full = url.standardizedFileURL.resolvingSymlinksInPath().path
+
+            files.append(
+                File(
+                    url: url,
+                    relativePath: String(full.dropFirst(base.count)),
+                    modified: values.contentModificationDate ?? .distantPast,
+                    size: values.fileSize ?? 0
+                )
+            )
+        }
+
+        return files
     }
 }

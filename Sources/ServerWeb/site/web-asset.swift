@@ -3,12 +3,20 @@ import Foundation
 public struct WebAsset: Sendable, Equatable {
     /// Absolute request path, always starting with `/`.
     public let path: String
-    public let contents: String
+    public let data: Data
     public let contentType: String
+
+    /// UTF-8 view of `data`, for textual assets.
+    public var contents: String {
+        String(
+            decoding: data,
+            as: UTF8.self
+        )
+    }
 
     public init(
         path: String,
-        contents: String,
+        data: Data,
         contentType: String? = nil
     ) {
         let normalized = Self.normalized(
@@ -16,9 +24,21 @@ public struct WebAsset: Sendable, Equatable {
         )
 
         self.path = normalized
-        self.contents = contents
+        self.data = data
         self.contentType = contentType ?? WebContentType.forPath(
             normalized
+        )
+    }
+
+    public init(
+        path: String,
+        contents: String,
+        contentType: String? = nil
+    ) {
+        self.init(
+            path: path,
+            data: Data(contents.utf8),
+            contentType: contentType
         )
     }
 

@@ -8,6 +8,7 @@ struct ServerWebTestMain {
         for suite in [
             ServerWebSiteTestSuite.testSuite,
             ServerWebServeTestSuite.testSuite,
+            ServerWebLiveTestSuite.testSuite,
         ] {
             let reporter = PlainTextTestReporter()
             let result = await TestRunner.run(suite, sink: reporter)

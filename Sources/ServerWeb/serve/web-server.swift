@@ -15,22 +15,34 @@ public enum WebServerError: Error, LocalizedError {
 }
 
 public struct WebServer: Sendable {
-    public let site: WebSite
+    public let store: WebSiteStore
+    public let liveReload: Bool
     public let process: ServerProcess
+
+    public var site: WebSite {
+        store.site
+    }
 
     public var config: ServerConfig {
         process.config
     }
 
-    /// - Parameter port: `nil` (or `0`) lets the kernel pick a free port.
+    /// - Parameters:
+    ///   - port: `nil` (or `0`) lets the kernel pick a free port.
+    ///   - liveReload: inject a polling script into HTML responses and serve
+    ///     `WebLiveReload.endpoint`; pages reload on `replace(_:)` or restart.
     public init(
         site: WebSite,
         host: String = "127.0.0.1",
         port: UInt16? = nil,
+        liveReload: Bool = false,
         logLevel: LogLevel = .info,
         logger: StandardLogger? = nil
     ) {
-        self.site = site
+        let store = WebSiteStore(site: site)
+
+        self.store = store
+        self.liveReload = liveReload
         self.process = ServerProcess(
             config: ServerConfig(
                 name: "serverweb",
@@ -38,9 +50,23 @@ public struct WebServer: Sendable {
                 host: host,
                 logLevel: logLevel
             ),
-            routes: site.routes,
+            routes: liveReload ? [WebLiveReload.route(store: store)] : [],
+            unmatched: { request in
+                Self.respond(
+                    to: request,
+                    store: store,
+                    liveReload: liveReload
+                )
+            },
             logger: logger
         )
+    }
+
+    /// Swaps the served site; with live reload on, open pages reload.
+    public func replace(
+        _ site: WebSite
+    ) {
+        store.replace(site)
     }
 
     /// Port the listener bound, once started.
@@ -86,5 +112,31 @@ public struct WebServer: Sendable {
         let url = try await start()
         try browser.open(url)
         return url
+    }
+
+    static func respond(
+        to request: HTTPRequest,
+        store: WebSiteStore,
+        liveReload: Bool
+    ) -> HTTPResponse? {
+        guard request.method == .get || request.method == .head,
+              let asset = store.asset(forRequestPath: request.path.raw) else {
+            return nil
+        }
+
+        var response = asset.response
+
+        if liveReload, WebContentType.isHTML(asset.contentType) {
+            response.body = WebLiveReload.inject(
+                token: store.token,
+                into: asset.contents
+            )
+        }
+
+        if request.method == .head {
+            response.bodyData = Data()
+        }
+
+        return response
     }
 }
