@@ -16,30 +16,57 @@ public extension WebAsset {
 }
 
 public extension WebSite {
-    /// One GET route per asset, plus `/` for the index asset.
-    /// Unmatched paths fall through to the router's 404.
+    static let directoryIndexName = "index.html"
+
+    /// Every request path the site answers, mapped to the asset it serves.
+    ///
+    /// Besides each asset's own path, `/` serves the index asset and every
+    /// `<dir>/index.html` is also served at `<dir>/` and `<dir>`, because the
+    /// router matches paths exactly.
+    var servedPaths: [(path: String, asset: WebAsset)] {
+        var served: [(path: String, asset: WebAsset)] = []
+        var seen: Set<String> = []
+
+        func add(_ path: String, _ asset: WebAsset) {
+            guard seen.insert(path).inserted else {
+                return
+            }
+            served.append((path, asset))
+        }
+
+        for asset in assets {
+            add(asset.path, asset)
+        }
+
+        if let index = asset(at: index) {
+            add("/", index)
+        }
+
+        for asset in assets where (asset.path as NSString).lastPathComponent == Self.directoryIndexName {
+            let directory = String(
+                asset.path.dropLast(Self.directoryIndexName.count)
+            )
+
+            guard directory != "/" else {
+                continue
+            }
+
+            add(directory, asset)
+            add(String(directory.dropLast()), asset)
+        }
+
+        return served
+    }
+
+    /// One GET route per served path. Unmatched paths fall through to the router's 404.
     var routes: [Route] {
-        var routes = assets.map { asset in
+        servedPaths.map { path, asset in
             Route(
                 method: .get,
-                path: asset.path
+                path: path
             ) { _, _ in
                 asset.response
             }
         }
-
-        if let index = asset(at: index),
-           index.path != "/" {
-            routes.append(
-                Route(
-                    method: .get,
-                    path: "/"
-                ) { _, _ in
-                    index.response
-                }
-            )
-        }
-
-        return routes
     }
 }

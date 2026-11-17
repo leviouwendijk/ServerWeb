@@ -129,7 +129,7 @@ struct App {
                 site = WebServeDemo.site
             }
 
-            let server = try WebServer(
+            let server = WebServer(
                 site: site,
                 host: command.host,
                 port: command.port

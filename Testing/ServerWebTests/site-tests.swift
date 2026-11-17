@@ -141,6 +141,25 @@ enum ServerWebSiteTestSuite {
                     "text/css; charset=utf-8",
                     "serverweb.constructors.content-type"
                 )
+
+                try Expect.equal(
+                    site.servedPaths.map(\.path),
+                    [
+                        "/index.html",
+                        "/about/index.html",
+                        "/assets/site.css",
+                        "/",
+                        "/about/",
+                        "/about",
+                    ],
+                    "serverweb.constructors.served-paths"
+                )
+
+                try Expect.equal(
+                    site.servedPaths.first { $0.path == "/about/" }?.asset.contents,
+                    "<p>about</p>",
+                    "serverweb.constructors.directory-index"
+                )
             }
 
             Test(

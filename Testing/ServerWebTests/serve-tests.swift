@@ -34,12 +34,12 @@ enum ServerWebServeTestSuite {
             Test(
                 "serves assets with content types and 404s unknown paths"
             ) {
-                let server = try WebServer(
+                let server = WebServer(
                     site: site,
                     logLevel: .error
                 )
 
-                try await server.start()
+                let url = try await server.start()
 
                 defer {
                     Task {
@@ -47,10 +47,21 @@ enum ServerWebServeTestSuite {
                     }
                 }
 
+                let port = try Expect.notNil(
+                    url.port,
+                    "serverweb.serve.bound-port"
+                )
+
+                try Expect.notEqual(
+                    port,
+                    0,
+                    "serverweb.serve.bound-port-resolved"
+                )
+
                 let client = HTTPClient(
                     config: HTTPClientConfig(
                         host: server.config.host,
-                        port: server.config.port
+                        port: UInt16(port)
                     )
                 )
 
@@ -109,13 +120,18 @@ enum ServerWebServeTestSuite {
                 "startAndOpen hands the bound url to the browser"
             ) {
                 let browser = RecordingBrowser()
-                let server = try WebServer(
+                let server = WebServer(
                     site: site,
                     logLevel: .error
                 )
 
                 let url = try await server.startAndOpen(
                     using: browser
+                )
+
+                let port = try Expect.notNil(
+                    await server.boundPort(),
+                    "serverweb.serve.open-bound-port"
                 )
 
                 await server.stop()
@@ -130,7 +146,7 @@ enum ServerWebServeTestSuite {
 
                 try Expect.equal(
                     url.absoluteString,
-                    "http://127.0.0.1:\(server.config.port)/",
+                    "http://127.0.0.1:\(port)/",
                     "serverweb.serve.url-shape"
                 )
             }

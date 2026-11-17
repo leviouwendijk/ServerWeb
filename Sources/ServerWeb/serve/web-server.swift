@@ -3,6 +3,17 @@ import HTTP
 import Server
 import Loggers
 
+public enum WebServerError: Error, LocalizedError {
+    case missingBoundPort
+
+    public var errorDescription: String? {
+        switch self {
+        case .missingBoundPort:
+            return "Server started but reported no bound port"
+        }
+    }
+}
+
 public struct WebServer: Sendable {
     public let site: WebSite
     public let process: ServerProcess
@@ -11,27 +22,19 @@ public struct WebServer: Sendable {
         process.config
     }
 
-    public var url: URL {
-        URL(string: "http://\(config.host):\(config.port)/")!
-    }
-
-    /// - Parameter port: `nil` picks a free port.
+    /// - Parameter port: `nil` (or `0`) lets the kernel pick a free port.
     public init(
         site: WebSite,
         host: String = "127.0.0.1",
         port: UInt16? = nil,
         logLevel: LogLevel = .info,
         logger: StandardLogger? = nil
-    ) throws {
-        let resolved = try port ?? WebPort.available(
-            host: host
-        )
-
+    ) {
         self.site = site
         self.process = ServerProcess(
             config: ServerConfig(
                 name: "serverweb",
-                port: resolved,
+                port: port ?? 0,
                 host: host,
                 logLevel: logLevel
             ),
@@ -40,10 +43,30 @@ public struct WebServer: Sendable {
         )
     }
 
-    /// Binds the port and returns once the listener is ready.
+    /// Port the listener bound, once started.
+    public func boundPort() async -> UInt16? {
+        await process.engine.listenerBoundPort
+    }
+
+    /// URL of the running server, once started.
+    public func url() async -> URL? {
+        guard let port = await boundPort() else {
+            return nil
+        }
+
+        return URL(string: "http://\(config.host):\(port)/")
+    }
+
+    /// Binds the port and returns the served URL once the listener is ready.
     @discardableResult
     public func start() async throws -> URL {
         try await process.engine.start()
+
+        guard let url = await url() else {
+            await stop()
+            throw WebServerError.missingBoundPort
+        }
+
         return url
     }
 
