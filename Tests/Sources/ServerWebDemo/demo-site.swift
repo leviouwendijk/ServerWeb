@@ -195,7 +195,7 @@ enum DemoSite {
     // MARK: - CSS
 
     static let stylesheet = CSSContribution(
-        identifier: "demo-style",
+        identifier: CSSContributionIdentifier(rawValue: "demo-style"),
         content: CSSContributionSet {
             CSS.rule(
                 ":root",
@@ -297,7 +297,7 @@ enum DemoSite {
     // MARK: - JS
 
     static let sharedScript = JSContribution(
-        identifier: "demo-status",
+        identifier: JSContributionIdentifier(rawValue: "demo-status"),
         script: .inline(
             JSSource(
                 """
@@ -319,7 +319,7 @@ enum DemoSite {
     )
 
     static let filterScript = JSContribution(
-        identifier: "demo-filter",
+        identifier: JSContributionIdentifier(rawValue: "demo-filter"),
         script: .inline(
             JSSource(
                 """
