@@ -22,8 +22,8 @@ let package = Package(
         .package(url: "https://github.com/swift-webc/HTTP.git", branch: "master"),
         .package(url: "https://github.com/swift-webc/Server.git", branch: "master"),
         .package(url: "https://github.com/swift-webc/Constructors.git", branch: "master"),
-        .package(url: "https://github.com/leviouwendijk/Path.git", branch: "master"),
-        .package(url: "https://github.com/leviouwendijk/Loggers.git", branch: "master"),
+        .package(url: "https://github.com/swift-lco/Path.git", branch: "master"),
+        .package(url: "https://github.com/swift-lco/Loggers.git", branch: "master"),
     ],
     targets: [
         .target(
