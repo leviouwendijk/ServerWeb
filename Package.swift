@@ -19,9 +19,9 @@ let package = Package(
         ),
     ],
     dependencies: [
-        .package(url: "https://github.com/leviouwendijk/HTTP.git", branch: "master"),
-        .package(url: "https://github.com/leviouwendijk/Server.git", branch: "master"),
-        .package(url: "https://github.com/leviouwendijk/Constructors.git", branch: "master"),
+        .package(url: "https://github.com/swift-webc/HTTP.git", branch: "master"),
+        .package(url: "https://github.com/swift-webc/Server.git", branch: "master"),
+        .package(url: "https://github.com/swift-webc/Constructors.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Path.git", branch: "master"),
         .package(url: "https://github.com/leviouwendijk/Loggers.git", branch: "master"),
     ],
