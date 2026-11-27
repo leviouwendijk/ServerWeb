@@ -32,6 +32,21 @@ enum ServerWebServeTestSuite {
             title: "ServerWeb serve tests"
         ) {
             Test(
+                "host table picks the site by Host, ignoring port and case, with aliases"
+            ) {
+                let table = WebHostTable()
+                table.serve(site, host: "Example.com", aliases: ["www.example.com"])
+
+                try Expect.notNil(table.store(forHost: "example.com:8080"), "serverweb.hosts.port-ignored")
+                try Expect.notNil(table.store(forHost: "WWW.example.com"), "serverweb.hosts.alias")
+                try Expect.true(table.store(forHost: "other.example") == nil, "serverweb.hosts.unknown")
+                try Expect.notNil(
+                    table.store(forHost: "example.com")?.asset(forRequestPath: "/style.css"),
+                    "serverweb.hosts.asset"
+                )
+            }
+
+            Test(
                 "serves assets with content types and 404s unknown paths"
             ) {
                 let server = WebServer(
