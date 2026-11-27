@@ -42,3 +42,22 @@ public extension WebSite {
         )
     }
 }
+
+public extension WebSite {
+    /// Serves an `ArtifactTree` from memory: every artifact at its planned
+    /// path, as bytes (binary assets included).
+    init(
+        tree: ArtifactTree,
+        index: String = "/index.html"
+    ) throws {
+        self.init(
+            assets: try tree.entries.map { entry in
+                WebAsset(
+                    path: entry.path.rendered(asRootPath: true),
+                    data: try tree.bytes(for: entry.key)
+                )
+            },
+            index: index
+        )
+    }
+}
